@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reference Linker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon"><i data-lucide="link-2"></i></div>
+      <div class="brand-text">
+        <div class="brand-name">Reference Linker</div>
+        <div class="brand-sub">citation to reference linker</div>
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step" id="step1">
+        <div class="step-head">
+          <div class="step-num">1</div>
+          <div class="step-title">Upload XHTML</div>
+        </div>
+        <div class="step-body">
+          <label class="dropzone" id="dropzone">
+            <input type="file" id="fileInput" accept=".xhtml,.html,.xml" hidden>
+            <i data-lucide="upload-cloud"></i>
+            <span>Drop file or click to browse</span>
+            <span class="hint">.xhtml file</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="step" id="step2">
+        <div class="step-head">
+          <div class="step-num">2</div>
+          <div class="step-title">File Info</div>
+        </div>
+        <div class="step-body">
+          <div class="info-row">
+            <span class="info-label">File</span>
+            <span class="info-value" id="fileNameOut">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">References found</span>
+            <span class="info-value" id="refCountOut">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="theme-toggle" id="themeToggle">
+        <i data-lucide="moon"></i>
+        <span>Toggle theme</span>
+      </button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="tabbar">
+      <div class="tab active" data-tab="linker">
+        <i data-lucide="link"></i>
+        <span>Reference Linker</span>
+      </div>
+    </div>
+
+    <div class="summary-bar" id="summaryBar" hidden>
+      <div class="summary-stat">
+        <span class="summary-num" id="statTotal">0</span>
+        <span class="summary-label">Total Linked</span>
+      </div>
+      <div class="summary-stat linked">
+        <span class="summary-num" id="statLinked">0</span>
+        <span class="summary-label">Manual</span>
+      </div>
+      <div class="summary-stat unlinked">
+        <span class="summary-num" id="statUnlinked">0</span>
+        <span class="summary-label">Auto</span>
+      </div>
+      <div class="summary-stat">
+        <span class="summary-num" id="statRefs">0</span>
+        <span class="summary-label">Refs</span>
+      </div>
+      <div class="summary-stat" id="autoStat">
+        <span class="summary-num" id="statAuto"
+          style="color:var(--purple)">0</span>
+        <span class="summary-label">Auto</span>
+      </div>
+      <button class="btn-export" id="exportBtn">
+        <i data-lucide="download"></i>
+        Export XHTML
+      </button>
+      <button class="btn-export" id="copyBtn" style="background:var(--bg-elev-2);color:var(--text);border:1px solid var(--border);">
+        <i data-lucide="clipboard"></i>
+        Copy XHTML
+      </button>
+    </div>
+
+    <div class="content-area" id="contentArea">
+      <div class="empty-state">
+        <i data-lucide="file-text"></i>
+        <p>Upload an XHTML file to begin linking citations</p>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<div class="popup" id="popup" hidden>
+  <div class="popup-head">
+    <span class="popup-title" id="popupTitle">Citation</span>
+    <button class="popup-close" id="popupClose"><i data-lucide="x"></i></button>
+  </div>
+  <div class="popup-body" id="popupBody"></div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
