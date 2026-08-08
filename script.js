@@ -953,8 +953,11 @@ themeToggle.addEventListener('click', () => {
 });
 
 function updateThemeIcon() {
-  const icon = themeToggle.querySelector('i');
+  const icon = themeToggle.querySelector('i, svg');
   const current = document.documentElement.getAttribute('data-theme');
-  icon.setAttribute('data-lucide', current === 'light' ? 'sun' : 'moon');
+  const name = current === 'light' ? 'sun' : 'moon';
+  const replacement = document.createElement('i');
+  replacement.setAttribute('data-lucide', name);
+  icon.replaceWith(replacement);
   lucide.createIcons();
 }
