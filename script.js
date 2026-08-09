@@ -856,6 +856,13 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
     });
 
     let serialized = new XMLSerializer().serializeToString(freshDoc);
+
+    // strip redundant xmlns re-declared on every child element
+    serialized = serialized.replace(
+      /(<(?!html\b)[a-zA-Z][^>]*?)\s+xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g,
+      '$1'
+    );
+
     const declMatch = originalRawText.match(/^\s*<\?xml[^>]*\?>/);
     if (declMatch && !serialized.startsWith('<?xml')) {
       serialized = declMatch[0] + '\n' + serialized;
@@ -907,6 +914,12 @@ function exportXHTML() {
   });
 
   let serialized = new XMLSerializer().serializeToString(freshDoc);
+
+  // strip redundant xmlns re-declared on every child element
+  serialized = serialized.replace(
+    /(<(?!html\b)[a-zA-Z][^>]*?)\s+xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g,
+    '$1'
+  );
 
   const declMatch = originalRawText.match(/^\s*<\?xml[^>]*\?>/);
   if (declMatch && !serialized.startsWith('<?xml')) {
