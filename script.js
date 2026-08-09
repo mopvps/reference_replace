@@ -860,22 +860,50 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
 });
 
 function buildSerializedExport() {
-  const clone = contentArea.cloneNode(true);
-  clone.querySelectorAll('a.citation').forEach(a => {
-    a.classList.remove('citation', 'linked', 'auto-linked', 'unlinked');
-    if (!a.className.trim()) a.removeAttribute('class');
+  let output = originalRawText;
+
+  const newLinks = [];
+  contentArea.querySelectorAll('a[href^="#"]').forEach(a => {
+    newLinks.push({
+      href: a.getAttribute('href'),
+      text: a.textContent
+    });
   });
-  clone.querySelectorAll('.doc-line').forEach(el => el.classList.remove('doc-line'));
-  clone.querySelectorAll('.ref-block').forEach(el => el.classList.remove('ref-block'));
-  clone.querySelectorAll('[class=""]').forEach(el => el.removeAttribute('class'));
 
-  const bodyInner = new XMLSerializer().serializeToString(clone)
-    .replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '');
+  newLinks.sort((a, b) => b.text.length - a.text.length);
 
-  return originalRawText.replace(
-    /(<body[^>]*>)([\s\S]*)(<\/body>)/,
-    (_, open, __, close) => `${open}\n${bodyInner}\n${close}`
-  );
+  newLinks.forEach(({ href, text }) => {
+    const pattern = text.split('').map(ch => {
+      if (/\s/.test(ch)) return '\\s+';
+      if (/[a-zA-Z0-9]/.test(ch)) return ch;
+      const code = ch.charCodeAt(0);
+      const esc = ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return `(?:${esc}|&#${code};|&#x${code.toString(16)};)`;
+    }).join('');
+
+    const re = new RegExp(pattern, 'g');
+    let m;
+    while ((m = re.exec(output)) !== null) {
+      const matchStart = m.index;
+      const matchEnd = matchStart + m[0].length;
+
+      // Proper check: count only OPEN <a ...> that have href (real links),
+      // not self-closing <a id=".."/> anchors
+      const before = output.slice(0, matchStart);
+      // Match <a ...> that contains href, and isn't self-closed
+      const openLinks = (before.match(/<a\s[^>]*href[^>]*(?<!\/)>/g) || []).length;
+      const closeLinks = (before.match(/<\/a>/g) || []).length;
+
+      if (openLinks > closeLinks) continue;
+
+      output = output.slice(0, matchStart) +
+               `<a href="${href}">` + m[0] + `</a>` +
+               output.slice(matchEnd);
+      break;
+    }
+  });
+
+  return output;
 }
 
 function exportXHTML() {
