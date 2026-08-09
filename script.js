@@ -860,56 +860,22 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
 });
 
 function buildSerializedExport() {
-  // Work directly on the raw string — entities stay untouched
-  let output = originalRawText;
-
-  // Collect all links from live DOM
-  const linkedAnchors = [];
-  contentArea.querySelectorAll('a[href^="#"]').forEach(a => {
-    linkedAnchors.push({
-      href: a.getAttribute('href'),
-      text: a.textContent.trim()
-    });
+  const clone = contentArea.cloneNode(true);
+  clone.querySelectorAll('a.citation').forEach(a => {
+    a.classList.remove('citation', 'linked', 'auto-linked', 'unlinked');
+    if (!a.className.trim()) a.removeAttribute('class');
   });
+  clone.querySelectorAll('.doc-line').forEach(el => el.classList.remove('doc-line'));
+  clone.querySelectorAll('.ref-block').forEach(el => el.classList.remove('ref-block'));
+  clone.querySelectorAll('[class=""]').forEach(el => el.removeAttribute('class'));
 
-  // For each linked anchor, find the matching text in the raw string
-  // and wrap it with <a href="...">...</a>
-  // We must skip text already inside an <a href>
-  linkedAnchors.forEach(({ href, text }) => {
-    // escape text for use in regex
-    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const bodyInner = new XMLSerializer().serializeToString(clone)
+    .replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '');
 
-    // Match the text only when NOT already inside an <a ...>
-    // Strategy: replace first occurrence that is not inside <a>
-    const re = new RegExp(escaped);
-    let searchFrom = 0;
-
-    while (searchFrom < output.length) {
-      const match = re.exec(output.slice(searchFrom));
-      if (!match) break;
-
-      const matchStart = searchFrom + match.index;
-      const matchEnd = matchStart + text.length;
-
-      // Check if this position is already inside an <a tag
-      const before = output.slice(0, matchStart);
-      const openA = (before.match(/<a[\s>]/gi) || []).length;
-      const closeA = (before.match(/<\/a>/gi) || []).length;
-      const insideA = openA > closeA;
-
-      if (!insideA) {
-        // inject the <a> tag
-        output = output.slice(0, matchStart) +
-                 `<a href="${href}">` + text + '</a>' +
-                 output.slice(matchEnd);
-        break;
-      }
-
-      searchFrom = matchEnd;
-    }
-  });
-
-  return output;
+  return originalRawText.replace(
+    /(<body[^>]*>)([\s\S]*)(<\/body>)/,
+    (_, open, __, close) => `${open}\n${bodyInner}\n${close}`
+  );
 }
 
 function exportXHTML() {
