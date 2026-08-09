@@ -835,38 +835,7 @@ exportBtn.addEventListener('click', () => {
 
 document.getElementById('copyBtn').addEventListener('click', async () => {
   try {
-    let freshDoc = new DOMParser().parseFromString(originalRawText, 'application/xhtml+xml');
-    if (freshDoc.querySelector('parsererror')) {
-      freshDoc = new DOMParser().parseFromString(originalRawText, 'text/html');
-    }
-    const freshBody = freshDoc.body || freshDoc.querySelector('body');
-    while (freshBody.firstChild) freshBody.removeChild(freshBody.firstChild);
-    Array.from(contentArea.childNodes).forEach(node => {
-      freshBody.appendChild(freshDoc.importNode(node, true));
-    });
-
-    // strip UI classes same as exportXHTML
-    freshBody.querySelectorAll('.doc-line, .ref-block').forEach(el => {
-      el.classList.remove('doc-line', 'ref-block');
-      if (!el.className) el.removeAttribute('class');
-    });
-    freshBody.querySelectorAll('.citation').forEach(el => {
-      el.classList.remove('citation', 'linked', 'unlinked', 'auto-linked');
-      if (!el.className) el.removeAttribute('class');
-    });
-
-    let serialized = new XMLSerializer().serializeToString(freshDoc);
-
-    // strip redundant xmlns re-declared on every child element
-    serialized = serialized.replace(
-      /(<(?!html\b)[a-zA-Z][^>]*?)\s+xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g,
-      '$1'
-    );
-
-    const declMatch = originalRawText.match(/^\s*<\?xml[^>]*\?>/);
-    if (declMatch && !serialized.startsWith('<?xml')) {
-      serialized = declMatch[0] + '\n' + serialized;
-    }
+    const serialized = buildSerializedExport();
 
     await navigator.clipboard.writeText(serialized);
 
@@ -890,41 +859,61 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
   }
 });
 
+function buildSerializedExport() {
+  // Work directly on the raw string — entities stay untouched
+  let output = originalRawText;
+
+  // Collect all links from live DOM
+  const linkedAnchors = [];
+  contentArea.querySelectorAll('a[href^="#"]').forEach(a => {
+    linkedAnchors.push({
+      href: a.getAttribute('href'),
+      text: a.textContent.trim()
+    });
+  });
+
+  // For each linked anchor, find the matching text in the raw string
+  // and wrap it with <a href="...">...</a>
+  // We must skip text already inside an <a href>
+  linkedAnchors.forEach(({ href, text }) => {
+    // escape text for use in regex
+    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    // Match the text only when NOT already inside an <a ...>
+    // Strategy: replace first occurrence that is not inside <a>
+    const re = new RegExp(escaped);
+    let searchFrom = 0;
+
+    while (searchFrom < output.length) {
+      const match = re.exec(output.slice(searchFrom));
+      if (!match) break;
+
+      const matchStart = searchFrom + match.index;
+      const matchEnd = matchStart + text.length;
+
+      // Check if this position is already inside an <a tag
+      const before = output.slice(0, matchStart);
+      const openA = (before.match(/<a[\s>]/gi) || []).length;
+      const closeA = (before.match(/<\/a>/gi) || []).length;
+      const insideA = openA > closeA;
+
+      if (!insideA) {
+        // inject the <a> tag
+        output = output.slice(0, matchStart) +
+                 `<a href="${href}">` + text + '</a>' +
+                 output.slice(matchEnd);
+        break;
+      }
+
+      searchFrom = matchEnd;
+    }
+  });
+
+  return output;
+}
+
 function exportXHTML() {
-  let freshDoc = new DOMParser().parseFromString(originalRawText, 'application/xhtml+xml');
-  if (freshDoc.querySelector('parsererror')) {
-    freshDoc = new DOMParser().parseFromString(originalRawText, 'text/html');
-  }
-  const freshBody = freshDoc.body || freshDoc.querySelector('body');
-
-  while (freshBody.firstChild) freshBody.removeChild(freshBody.firstChild);
-
-  Array.from(contentArea.childNodes).forEach(node => {
-    freshBody.appendChild(freshDoc.importNode(node, true));
-  });
-
-  // strip helper classes used only for UI
-  freshBody.querySelectorAll('.doc-line, .ref-block').forEach(el => {
-    el.classList.remove('doc-line', 'ref-block');
-    if (!el.className) el.removeAttribute('class');
-  });
-  freshBody.querySelectorAll('.citation').forEach(el => {
-    el.classList.remove('citation', 'linked', 'unlinked');
-    if (!el.className) el.removeAttribute('class');
-  });
-
-  let serialized = new XMLSerializer().serializeToString(freshDoc);
-
-  // strip redundant xmlns re-declared on every child element
-  serialized = serialized.replace(
-    /(<(?!html\b)[a-zA-Z][^>]*?)\s+xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g,
-    '$1'
-  );
-
-  const declMatch = originalRawText.match(/^\s*<\?xml[^>]*\?>/);
-  if (declMatch && !serialized.startsWith('<?xml')) {
-    serialized = declMatch[0] + '\n' + serialized;
-  }
+  const serialized = buildSerializedExport();
 
   const blob = new Blob([serialized], { type: 'application/xhtml+xml' });
   const url = URL.createObjectURL(blob);
