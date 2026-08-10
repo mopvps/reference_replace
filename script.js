@@ -523,67 +523,43 @@ function findUnlinkedDuplicates(linkedText, href) {
   const blocks = contentArea.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6');
 
   blocks.forEach(block => {
-    if (block.closest('.ref-block')) return;
+    if (block.classList.contains('ref-block') || block.closest('.ref-block')) return;
 
     const norm = s => s.replace(/[‘’ʼ']/g, "'");
 
-    // count how many times linkedText appears in block textContent
-    const blockText = norm(block.textContent);
-    const searchText = norm(linkedText);
-
-    // count total occurrences
-    let totalCount = 0;
-    let searchIdx = 0;
-    while (true) {
-      const found = blockText.indexOf(searchText, searchIdx);
-      if (found === -1) break;
-      totalCount++;
-      searchIdx = found + searchText.length;
-    }
-    if (totalCount === 0) return;
-
-    // count already linked occurrences
-    let linkedCount = 0;
-    block.querySelectorAll('a[href]').forEach(a => {
-      const anchorText = norm(a.textContent.trim());
-      const st = norm(searchText.trim());
-      if (anchorText === st || anchorText.includes(st) || st.includes(anchorText)) {
-        linkedCount++;
+    // build combined string from text nodes NOT inside <a> — same as linkBlockText
+    const freeTextNodes = [];
+    const freeWalker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (node.parentElement.closest('a[href]')) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
       }
     });
+    let freeNode;
+    while ((freeNode = freeWalker.nextNode())) freeTextNodes.push(freeNode);
 
-    // number of unlinked = total - linked
-    const unlinkedCount = totalCount - linkedCount;
-    if (unlinkedCount === 0) return;
+    let freeCombined = '';
+    freeTextNodes.forEach(n => { freeCombined += n.nodeValue; });
 
-    // push each unlinked occurrence with its own index
+    const normFree = norm(freeCombined);
+    const normSearch = norm(linkedText);
+
     let occurrenceIdx = 0;
     let searchPos = 0;
-    const fullText = block.textContent;
-    const normFull = norm(fullText);
 
-    // skip already-linked occurrences by finding unlinked positions
-    const linkedRanges = [];
-    block.querySelectorAll('a[href]').forEach(a => {
-      const aText = norm(a.textContent);
-      const aIdx = normFull.indexOf(aText);
-      if (aIdx !== -1) linkedRanges.push({ start: aIdx, end: aIdx + aText.length });
-    });
-
-    while (occurrenceIdx < unlinkedCount) {
-      const found = normFull.indexOf(searchText, searchPos);
+    while (true) {
+      const found = normFree.indexOf(normSearch, searchPos);
       if (found === -1) break;
-      const isLinked = linkedRanges.some(r => found >= r.start && found < r.end);
-      if (!isLinked) {
+
       const start = Math.max(0, found - 40);
-      const end = Math.min(fullText.length, found + linkedText.length + 40);
+      const end = Math.min(freeCombined.length, found + linkedText.length + 40);
       const preview = (start > 0 ? '...' : '') +
-                      fullText.slice(start, end) +
-                      (end < fullText.length ? '...' : '');
-        results.push({ block, preview, occurrenceIndex: occurrenceIdx });
-        occurrenceIdx++;
-      }
-      searchPos = found + searchText.length;
+                      freeCombined.slice(start, end) +
+                      (end < freeCombined.length ? '...' : '');
+
+      results.push({ block, preview, occurrenceIndex: occurrenceIdx });
+      occurrenceIdx++;
+      searchPos = found + normSearch.length;
     }
   });
 
@@ -671,16 +647,9 @@ function linkBlockText(block, linkedText, href, occurrenceIndex = 0) {
       return true;
     } catch(e2) {
       try {
-        const marker = document.createElement('span');
-        range.insertNode(marker);
-
-        const newRange = document.createRange();
-        newRange.setStartAfter(marker);
-        newRange.setEnd(endNode, endOffset);
-
-        const frag = newRange.extractContents();
+        const frag = range.extractContents();
         a.appendChild(frag);
-        marker.replaceWith(a);
+        range.insertNode(a);
         return true;
       } catch(e3) {
         return false;
@@ -890,6 +859,12 @@ function buildSerializedExport() {
       // Proper check: count only OPEN <a ...> that have href (real links),
       // not self-closing <a id=".."/> anchors
       const before = output.slice(0, matchStart);
+
+      // skip if inside a ref block
+      const lastRefOpen = before.lastIndexOf('<p class="ref"');
+      const lastRefClose = before.lastIndexOf('</p>');
+      if (lastRefOpen !== -1 && lastRefOpen > lastRefClose) continue;
+
       // Match <a ...> that contains href, and isn't self-closed
       const openLinks = (before.match(/<a\s[^>]*href[^>]*(?<!\/)>/g) || []).length;
       const closeLinks = (before.match(/<\/a>/g) || []).length;
