@@ -9,6 +9,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/diff/dist/diff.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/diff2html/bundles/js/diff2html.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html/bundles/css/diff2html.min.css"/>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -71,6 +74,10 @@
         <i data-lucide="link"></i>
         <span>Reference Linker</span>
       </div>
+      <div class="tab" data-tab="compare" id="compareTab">
+        <i data-lucide="diff"></i>
+        <span>HTML Compare</span>
+      </div>
     </div>
 
     <div class="summary-bar" id="summaryBar" hidden>
@@ -103,6 +110,10 @@
         <i data-lucide="clipboard"></i>
         Copy XHTML
       </button>
+      <button class="btn-export" id="compareBtn" style="background:var(--purple);margin-left:8px;">
+        <i data-lucide="diff"></i>
+        Compare HTML
+      </button>
     </div>
 
     <div class="content-area" id="contentArea">
@@ -110,6 +121,26 @@
         <i data-lucide="file-text"></i>
         <p>Upload an XHTML file to begin linking citations</p>
       </div>
+    </div>
+
+    <div class="compare-area" id="compareArea" hidden>
+      <div class="compare-toolbar">
+        <div class="compare-inputs">
+          <div class="compare-input-group">
+            <label>Original HTML</label>
+            <textarea id="compareLeft" placeholder="Paste original HTML here..." style="height:70px;"></textarea>
+          </div>
+          <div class="compare-input-group">
+            <label>Modified HTML</label>
+            <textarea id="compareRight" placeholder="Paste modified HTML here..." style="height:70px;"></textarea>
+          </div>
+        </div>
+        <button class="btn-export" id="runCompareBtn" style="margin:8px 24px;">
+          <i data-lucide="play"></i>
+          Run Compare
+        </button>
+      </div>
+      <div id="diffOutput" class="diff-output"></div>
     </div>
   </main>
 

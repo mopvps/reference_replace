@@ -1,5 +1,17 @@
 lucide.createIcons();
 
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const target = tab.dataset.tab;
+    contentArea.hidden = target !== 'linker';
+    summaryBar.hidden = target !== 'linker' || !refs.length;
+    document.getElementById('compareArea').hidden = target !== 'compare';
+    if (target === 'compare') document.getElementById('diffOutput').innerHTML = '';
+  });
+});
+
 const CITATION_RE = /\(([A-Z][a-záéíóúñ'’\-]+)(?:\s+(?:and|&)\s+[A-Z][a-z]+)?\s+(?:et al\.?)?,?\s*(\d{4}[a-z]?)\)/g;
 
 let originalRawText = '';
@@ -827,6 +839,203 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
     toast('Copy failed: ' + err.message);
   }
 });
+
+document.getElementById('compareBtn').addEventListener('click', () => {
+  // auto-fill left with original, right with exported
+  document.getElementById('compareLeft').value = originalRawText;
+  document.getElementById('compareRight').value = buildSerializedExport();
+
+  // switch to compare tab
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('compareTab').classList.add('active');
+  contentArea.hidden = true;
+  summaryBar.hidden = true;
+  document.getElementById('compareArea').hidden = false;
+
+  // run diff automatically
+  runCompare();
+});
+
+document.getElementById('runCompareBtn').addEventListener('click', runCompare);
+
+function highlightTag(tag) {
+  if (tag.startsWith('<?') || tag.startsWith('<!')) {
+    return `<span style="color:#808080;">${tag.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>`;
+  }
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const nameMatch = tag.match(/^(<\/?)([a-zA-Z][a-zA-Z0-9\-:]*)/);
+  if (!nameMatch) return tag.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const prefix = nameMatch[1];
+  const name = nameMatch[2];
+  const rest = tag.slice(prefix.length + name.length);
+  const suffix = rest.endsWith('/>') ? '/>' : '>';
+  const attrStr = rest.slice(0, rest.length - suffix.length);
+  const attrs = attrStr.replace(/([a-zA-Z\-:]+)(=)("(?:[^"]*)")/g, (_, aName, eq, aVal) =>
+    `<span style="color:#9cdcfe;">${aName}</span>${eq}<span style="color:#ce9178;">${esc(aVal)}</span>`
+  );
+  return `<span style="color:#569cd6;">${esc(prefix)}${name}</span>${attrs}<span style="color:#569cd6;">${esc(suffix)}</span>`;
+}
+
+function syntaxHighlight(line) {
+  const tagRe = /(<\?[^?]*\?>|<!--[\s\S]*?-->|<!DOCTYPE[^>]*>|<\/[a-zA-Z][a-zA-Z0-9\-:]*>|<[a-zA-Z][a-zA-Z0-9\-:]*(?:\s[^>]*)?\/?>)/g;
+  const result = [];
+  let last = 0, m;
+  while ((m = tagRe.exec(line)) !== null) {
+    if (m.index > last) {
+      result.push(`<span style="color:#d4d4d4;">${line.slice(last, m.index).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>`);
+    }
+    result.push(highlightTag(m[0]));
+    last = m.index + m[0].length;
+  }
+  if (last < line.length) {
+    result.push(`<span style="color:#d4d4d4;">${line.slice(last).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>`);
+  }
+  return result.join('') || ' ';
+}
+
+function wordLevelDiff(oldLine, newLine) {
+  const parts = Diff.diffWords(oldLine, newLine);
+  let oldHtml = '', newHtml = '';
+  parts.forEach(part => {
+    const esc = part.value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if (part.removed) {
+      oldHtml += `<mark style="background:#f0503f55;color:#f48771;border-radius:2px;">${esc}</mark>`;
+    } else if (part.added) {
+      newHtml += `<mark style="background:#3ecf8e55;color:#89d185;border-radius:2px;">${esc}</mark>`;
+    } else {
+      const highlighted = syntaxHighlight(part.value);
+      oldHtml += highlighted;
+      newHtml += highlighted;
+    }
+  });
+  return { oldHtml, newHtml };
+}
+
+function runCompare() {
+  const left = document.getElementById('compareLeft').value;
+  const right = document.getElementById('compareRight').value;
+
+  if (!left.trim() && !right.trim()) {
+    document.getElementById('diffOutput').innerHTML = `
+      <div style="text-align:center;color:#858585;padding:40px;font-size:13px;">
+        Paste HTML in both boxes and click Run Compare
+      </div>`;
+    return;
+  }
+
+  const diffResult = Diff.diffLines(left, right);
+  const leftRows = [];
+  const rightRows = [];
+  let leftLineNum = 1;
+  let rightLineNum = 1;
+
+  const ROW = (bg, numColor, num, content) =>
+    `<div style="display:flex;min-height:22px;background:${bg};">
+      <span style="min-width:48px;padding:2px 10px 2px 0;color:${numColor};text-align:right;user-select:none;font-size:11px;line-height:18px;border-right:1px solid #2a2d2e;flex-shrink:0;">${num}</span>
+      <span style="padding:2px 12px;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:18px;flex:1;">${content}</span>
+    </div>`;
+  const EMPTY = () => ROW('#181818', '#333', '', ' ');
+
+  diffResult.forEach((part, idx) => {
+    const lines = part.value.split('\n');
+    if (lines[lines.length - 1] === '') lines.pop();
+
+    if (part.removed) {
+      const nextPart = diffResult[idx + 1];
+      const addedLines = (nextPart && nextPart.added)
+        ? nextPart.value.split('\n').filter((l, i, a) => !(i === a.length - 1 && l === ''))
+        : [];
+
+      lines.forEach((line, li) => {
+        if (addedLines[li] !== undefined) {
+          const { oldHtml, newHtml } = wordLevelDiff(line, addedLines[li]);
+          leftRows.push(ROW('#2b1a1a', '#f44747', leftLineNum++, oldHtml));
+          rightRows.push(ROW('#1a2b1a', '#4ec94e', rightLineNum++, newHtml));
+        } else {
+          leftRows.push(ROW('#2b1a1a', '#f44747', leftLineNum++, syntaxHighlight(line)));
+          rightRows.push(EMPTY());
+        }
+      });
+      if (addedLines.length > lines.length) {
+        addedLines.slice(lines.length).forEach(line => {
+          leftRows.push(EMPTY());
+          rightRows.push(ROW('#1a2b1a', '#4ec94e', rightLineNum++, syntaxHighlight(line)));
+        });
+      }
+    } else if (part.added) {
+      const prevPart = diffResult[idx - 1];
+      if (prevPart && prevPart.removed) return;
+      lines.forEach(line => {
+        leftRows.push(EMPTY());
+        rightRows.push(ROW('#1a2b1a', '#4ec94e', rightLineNum++, syntaxHighlight(line)));
+      });
+    } else {
+      lines.forEach(line => {
+        const highlighted = syntaxHighlight(line);
+        leftRows.push(ROW('#1e1e1e', '#858585', leftLineNum++, highlighted));
+        rightRows.push(ROW('#1e1e1e', '#858585', rightLineNum++, highlighted));
+      });
+    }
+  });
+
+  const changedIndices = [];
+  leftRows.forEach((html, i) => {
+    if (html.includes('#2b1a1a') || html.includes('#1a2b1a')) changedIndices.push(i);
+  });
+  const changeGroups = [];
+  changedIndices.forEach(i => {
+    if (!changeGroups.length || i > changeGroups[changeGroups.length - 1] + 1) changeGroups.push(i);
+  });
+  let currentGroup = -1;
+
+  function panel(rows, label) {
+    return `<div style="flex:1;display:flex;flex-direction:column;border:1px solid #2a2d2e;border-radius:6px;min-width:0;overflow:hidden;">
+      <div style="background:#252526;padding:7px 14px;font-size:11px;color:#cccccc;border-bottom:1px solid #2a2d2e;font-family:var(--font-mono);flex-shrink:0;">${label}</div>
+      <div class="diff-panel-body" style="overflow:auto;background:#1e1e1e;font-family:var(--font-mono);">${rows.join('')}</div>
+    </div>`;
+  }
+
+  const diffOut = document.getElementById('diffOutput');
+  diffOut.innerHTML = `
+    <div class="diff-nav">
+      <span class="diff-nav-info" id="diffNavInfo">${changeGroups.length} change${changeGroups.length !== 1 ? 's' : ''}</span>
+      <button class="diff-nav-btn" id="diffPrevBtn">↑ Prev</button>
+      <button class="diff-nav-btn" id="diffNextBtn">↓ Next</button>
+    </div>
+    <div class="diff-panels">${panel(leftRows, 'Original')}${panel(rightRows, 'Modified')}</div>`;
+
+  const panels = diffOut.querySelectorAll('.diff-panel-body');
+  const [leftPanel, rightPanel] = panels;
+  let syncing = false;
+  leftPanel.addEventListener('scroll', () => {
+    if (syncing) return; syncing = true;
+    rightPanel.scrollTop = leftPanel.scrollTop;
+    rightPanel.scrollLeft = leftPanel.scrollLeft;
+    syncing = false;
+  });
+  rightPanel.addEventListener('scroll', () => {
+    if (syncing) return; syncing = true;
+    leftPanel.scrollTop = rightPanel.scrollTop;
+    leftPanel.scrollLeft = rightPanel.scrollLeft;
+    syncing = false;
+  });
+
+  function scrollToGroup(idx) {
+    if (!changeGroups.length) return;
+    currentGroup = (idx + changeGroups.length) % changeGroups.length;
+    const rows = leftPanel.querySelectorAll('div[style*="display:flex"]');
+    if (rows[changeGroups[currentGroup]]) {
+      rows[changeGroups[currentGroup]].scrollIntoView({ block: 'center' });
+      rows[changeGroups[currentGroup]].style.outline = '2px solid var(--accent)';
+      setTimeout(() => rows[changeGroups[currentGroup]].style.outline = '', 1000);
+    }
+    document.getElementById('diffNavInfo').textContent = `${currentGroup + 1} / ${changeGroups.length} change${changeGroups.length !== 1 ? 's' : ''}`;
+  }
+
+  document.getElementById('diffNextBtn').addEventListener('click', () => scrollToGroup(currentGroup + 1));
+  document.getElementById('diffPrevBtn').addEventListener('click', () => scrollToGroup(currentGroup - 1));
+}
+
 
 function buildSerializedExport() {
   let output = originalRawText;
