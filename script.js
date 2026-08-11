@@ -832,7 +832,7 @@ function buildSerializedExport() {
   let output = originalRawText;
 
   const newLinks = [];
-  contentArea.querySelectorAll('a[href^="#"]').forEach(a => {
+  contentArea.querySelectorAll('a.citation[href^="#"]').forEach(a => {
     newLinks.push({
       href: a.getAttribute('href'),
       text: a.textContent
@@ -855,20 +855,23 @@ function buildSerializedExport() {
     while ((m = re.exec(output)) !== null) {
       const matchStart = m.index;
       const matchEnd = matchStart + m[0].length;
-
-      // Proper check: count only OPEN <a ...> that have href (real links),
-      // not self-closing <a id=".."/> anchors
       const before = output.slice(0, matchStart);
 
+      // CRITICAL: skip if match is inside an XML/HTML tag (between < and >)
+      const lastOpen = before.lastIndexOf('<');
+      const lastClose = before.lastIndexOf('>');
+      if (lastOpen > lastClose) continue; // inside a tag
+
       // skip if inside a ref block
-      const lastRefOpen = before.lastIndexOf('<p class="ref"');
+      const refOpenRe = /<p[^>]+class="[^"]*\bref\b[^"]*"/g;
+      let lastRefOpen = -1, rm;
+      while ((rm = refOpenRe.exec(before)) !== null) lastRefOpen = rm.index;
       const lastRefClose = before.lastIndexOf('</p>');
       if (lastRefOpen !== -1 && lastRefOpen > lastRefClose) continue;
 
-      // Match <a ...> that contains href, and isn't self-closed
+      // skip if already inside an <a href> link
       const openLinks = (before.match(/<a\s[^>]*href[^>]*(?<!\/)>/g) || []).length;
       const closeLinks = (before.match(/<\/a>/g) || []).length;
-
       if (openLinks > closeLinks) continue;
 
       output = output.slice(0, matchStart) +
