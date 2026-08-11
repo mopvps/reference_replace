@@ -1022,18 +1022,31 @@ function runCompare() {
 
   function scrollToGroup(idx) {
     if (!changeGroups.length) return;
-    currentGroup = (idx + changeGroups.length) % changeGroups.length;
-    const rows = leftPanel.querySelectorAll('div[style*="display:flex"]');
-    if (rows[changeGroups[currentGroup]]) {
-      rows[changeGroups[currentGroup]].scrollIntoView({ block: 'center' });
-      rows[changeGroups[currentGroup]].style.outline = '2px solid var(--accent)';
-      setTimeout(() => rows[changeGroups[currentGroup]].style.outline = '', 1000);
+    currentGroup = idx;
+    const allRows = Array.from(leftPanel.children);
+    const target = allRows[changeGroups[currentGroup]];
+    if (target) {
+      target.scrollIntoView({ block: 'center' });
+      target.style.outline = '2px solid var(--accent)';
+      setTimeout(() => { target.style.outline = ''; }, 1000);
     }
-    document.getElementById('diffNavInfo').textContent = `${currentGroup + 1} / ${changeGroups.length} change${changeGroups.length !== 1 ? 's' : ''}`;
+    document.getElementById('diffNavInfo').textContent =
+      `${currentGroup + 1} / ${changeGroups.length} change${changeGroups.length !== 1 ? 's' : ''}`;
   }
 
-  document.getElementById('diffNextBtn').addEventListener('click', () => scrollToGroup(currentGroup + 1));
-  document.getElementById('diffPrevBtn').addEventListener('click', () => scrollToGroup(currentGroup - 1));
+  // auto jump to first change
+  if (changeGroups.length) scrollToGroup(0);
+
+  document.getElementById('diffNextBtn').addEventListener('click', () => {
+    if (!changeGroups.length) return;
+    if (currentGroup >= changeGroups.length - 1) return;
+    scrollToGroup(currentGroup + 1);
+  });
+  document.getElementById('diffPrevBtn').addEventListener('click', () => {
+    if (!changeGroups.length) return;
+    if (currentGroup <= 0) return;
+    scrollToGroup(currentGroup - 1);
+  });
 }
 
 
