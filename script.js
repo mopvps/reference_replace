@@ -1069,7 +1069,8 @@ function buildSerializedExport() {
       if (/[a-zA-Z0-9]/.test(ch)) return ch;
       const code = ch.charCodeAt(0);
       const esc = ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return `(?:${esc}|&#${code};|&#x${code.toString(16)};)`;
+      const hex = code.toString(16);
+      return `(?:${esc}|&#${code};|&#x0*${hex};)`;
     }).join('');
 
     const re = new RegExp(pattern, 'g');
