@@ -32,6 +32,9 @@ html[data-theme="light"]{
 
 *{box-sizing:border-box;margin:0;padding:0;}
 
+/* Ensure attribute hidden always wins over flex/display rules on tab panels */
+[hidden]{display:none !important;}
+
 body{
   font-family:var(--font-ui);
   background:var(--bg);

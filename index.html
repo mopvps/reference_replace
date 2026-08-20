@@ -13,6 +13,7 @@
 <script src="https://cdn.jsdelivr.net/npm/diff2html/bundles/js/diff2html.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html/bundles/css/diff2html.min.css"/>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="format.css">
 </head>
 <body>
 <div class="app">
@@ -26,7 +27,7 @@
       </div>
     </div>
 
-    <div class="steps">
+    <div class="steps" id="mainSidebarSteps">
       <div class="step" id="step1">
         <div class="step-head">
           <div class="step-num">1</div>
@@ -56,6 +57,10 @@
             <span class="info-label">References found</span>
             <span class="info-value" id="refCountOut">0</span>
           </div>
+          <div class="info-row">
+            <span class="info-label">Characters</span>
+            <span class="info-value" id="charCountOut">0</span>
+          </div>
         </div>
       </div>
     </div>
@@ -74,6 +79,10 @@
         <i data-lucide="link"></i>
         <span>Reference Linker</span>
       </div>
+      <div class="tab" data-tab="format" id="formatTab">
+        <i data-lucide="type"></i>
+        <span>Text Format</span>
+      </div>
       <div class="tab" data-tab="compare" id="compareTab">
         <i data-lucide="diff"></i>
         <span>HTML Compare</span>
@@ -91,16 +100,11 @@
       </div>
       <div class="summary-stat unlinked">
         <span class="summary-num" id="statUnlinked">0</span>
-        <span class="summary-label">Auto</span>
+        <span class="summary-label">Unlinked</span>
       </div>
       <div class="summary-stat">
         <span class="summary-num" id="statRefs">0</span>
         <span class="summary-label">Refs</span>
-      </div>
-      <div class="summary-stat" id="autoStat">
-        <span class="summary-num" id="statAuto"
-          style="color:var(--purple)">0</span>
-        <span class="summary-label">Auto</span>
       </div>
       <button class="btn-export" id="exportBtn">
         <i data-lucide="download"></i>
@@ -114,6 +118,72 @@
         <i data-lucide="diff"></i>
         Compare HTML
       </button>
+    </div>
+
+    <div class="fmt-area" id="fmtArea" hidden>
+      <div class="fmt-toolbar" id="fmtToolbar">
+        <button class="fmt-btn" data-tag="b" title="Bold"><strong>B</strong></button>
+        <button class="fmt-btn" data-tag="i" title="Italic"><em>I</em></button>
+        <button class="fmt-btn" data-tag="u" title="Underline"><u>U</u></button>
+        <button class="fmt-btn" data-tag="s" title="Strikethrough"><s>S</s></button>
+        <button class="fmt-btn" data-tag="sup" title="Superscript">Sup</button>
+        <button class="fmt-btn" data-tag="sub" title="Subscript">Sub</button>
+        <button class="fmt-btn" data-tag="span" data-class="smallcaps" title="Small Caps">Small Caps</button>
+        <button class="btn-export" id="fmtExportBtn" style="margin-left:auto;">
+          <i data-lucide="download"></i>
+          Export XHTML
+        </button>
+        <button class="btn-export" id="fmtCopyBtn" style="background:var(--bg-elev-2);color:var(--text);border:1px solid var(--border);">
+          <i data-lucide="clipboard"></i>
+          Copy XHTML
+        </button>
+      </div>
+      <div class="fmt-main">
+        <div class="fmt-content-wrap" id="fmtContentWrap">
+          <div class="fmt-area-empty" id="fmtEmptyState">
+            <i data-lucide="file-text"></i>
+            <p>Upload an XHTML file to begin formatting text</p>
+          </div>
+          <iframe class="fmt-frame" id="fmtFrame" title="Text Format document" sandbox="allow-same-origin" hidden></iframe>
+        </div>
+        <div class="fmt-legend" id="fmtLegend">
+          <div class="fmt-legend-title">Shortcuts</div>
+          <div class="fmt-legend-list">
+            <div class="fmt-legend-row">
+              <kbd>Ctrl</kbd><kbd>B</kbd>
+              <span>Bold</span>
+            </div>
+            <div class="fmt-legend-row">
+              <kbd>Ctrl</kbd><kbd>I</kbd>
+              <span>Italic</span>
+            </div>
+            <div class="fmt-legend-row">
+              <kbd>Ctrl</kbd><kbd>U</kbd>
+              <span>Underline</span>
+            </div>
+            <div class="fmt-legend-row">
+              <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>S</kbd>
+              <span>Strikethrough</span>
+            </div>
+            <div class="fmt-legend-row">
+              <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>P</kbd>
+              <span>Superscript</span>
+            </div>
+            <div class="fmt-legend-row">
+              <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd>
+              <span>Subscript</span>
+            </div>
+            <div class="fmt-legend-row">
+              <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>K</kbd>
+              <span>Small Caps</span>
+            </div>
+            <div class="fmt-legend-row">
+              <kbd>Ctrl</kbd><kbd>Z</kbd>
+              <span>Undo</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="content-area" id="contentArea">
@@ -157,5 +227,6 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <script src="script.js"></script>
+<script src="format.js"></script>
 </body>
 </html>

@@ -1,17 +1,48 @@
 lucide.createIcons();
 
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    const target = tab.dataset.tab;
-    contentArea.hidden = target !== 'linker';
-    summaryBar.hidden = target !== 'linker' || !refs.length;
-    document.getElementById('compareArea').hidden = target !== 'compare';
-    if (target === 'compare') document.getElementById('diffOutput').innerHTML = '';
+function switchTab(activeTab) {
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === activeTab);
   });
-});
 
+  const isLinker = activeTab === 'linker';
+  const isFormat = activeTab === 'format';
+  const isCompare = activeTab === 'compare';
+
+  // Control sidebar steps
+  const sidebarSteps = document.getElementById('mainSidebarSteps') || document.getElementById('steps');
+  if (sidebarSteps) sidebarSteps.hidden = isCompare;
+
+  // Control Reference Linker elements
+  const contentArea = document.getElementById('contentArea');
+  const summaryBar = document.getElementById('summaryBar');
+  const topActions = document.querySelector('.actions'); // Top-right Export/Copy/Compare group
+
+  if (contentArea) contentArea.hidden = !isLinker;
+  if (summaryBar) summaryBar.hidden = !isLinker;
+  if (topActions) topActions.style.display = isLinker ? 'flex' : 'none';
+
+  // Control Text Format elements
+  const fmtArea = document.getElementById('fmtArea');
+  if (fmtArea) fmtArea.hidden = !isFormat;
+
+  // Control Compare elements
+  const compareArea = document.getElementById('compareArea');
+  if (compareArea) compareArea.hidden = !isCompare;
+  if (isCompare && document.getElementById('diffOutput')) {
+    document.getElementById('diffOutput').innerHTML = '';
+  }
+
+  if (window.lucide) lucide.createIcons();
+}
+
+// Global click delegation for all tabs
+document.addEventListener('click', e => {
+  const tabBtn = e.target.closest('.tab');
+  if (tabBtn) {
+    switchTab(tabBtn.dataset.tab);
+  }
+});
 const CITATION_RE = /\(([A-Z][a-záéíóúñ'’\-]+)(?:\s+(?:and|&)\s+[A-Z][a-z]+)?\s+(?:et al\.?)?,?\s*(\d{4}[a-z]?)\)/g;
 
 let originalRawText = '';
@@ -56,7 +87,26 @@ function loadFile(file) {
   reader.onload = () => {
     originalRawText = reader.result;
     try {
+      // Parse for Linker Tab
       parseAndRender(originalRawText);
+
+      // Also Parse for Text Format Tab
+      if (typeof fmtParseAndRender === 'function') {
+        fmtFileName = fileName;
+        fmtOriginalRawText = originalRawText;
+        fmtParseAndRender(originalRawText);
+        fmtFileLoaded = true;
+      }
+
+      // Update unified sidebar UI
+      document.getElementById('fileNameOut').textContent = fileName;
+      document.getElementById('charCountOut').textContent = originalRawText.length;
+
+      // Re-enforce active tab visibility so Reference Linker bars stay hidden if currently on Text Format tab
+      const activeTabBtn = document.querySelector('.tab.active');
+      const activeTab = activeTabBtn ? activeTabBtn.dataset.tab : 'linker';
+      switchTab(activeTab);
+
       toast(`Loaded ${fileName}`, 'success');
     } catch (err) {
       toast(`Failed to parse file: ${err.message}`);
@@ -801,7 +851,6 @@ function updateStats() {
   document.getElementById('statTotal').textContent = total;
   document.getElementById('statLinked').textContent = manualLinkedCount;
   document.getElementById('statUnlinked').textContent = autoLinkedCount;
-  document.getElementById('statAuto').textContent = autoLinkedCount;
   document.getElementById('statRefs').textContent = refs.length;
 }
 
@@ -846,11 +895,7 @@ document.getElementById('compareBtn').addEventListener('click', () => {
   document.getElementById('compareRight').value = buildSerializedExport();
 
   // switch to compare tab
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('compareTab').classList.add('active');
-  contentArea.hidden = true;
-  summaryBar.hidden = true;
-  document.getElementById('compareArea').hidden = false;
+  switchTab('compare');
 
   // run diff automatically
   runCompare();
