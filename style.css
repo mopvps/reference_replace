@@ -175,6 +175,183 @@ body{
 .btn-export:hover{filter:brightness(1.08);}
 .btn-export i{width:15px;height:15px;}
 
+.linker-main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.linker-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--bg-elev);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.linker-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.linker-sidebar-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+.linker-sidebar-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+
+.linker-sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.linker-sidebar-empty {
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: center;
+  padding: 20px 10px;
+}
+
+.linker-citation-item {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.linker-citation-item:hover {
+  border-color: var(--accent);
+}
+
+.linker-citation-item.auto-linked {
+  border-left-color: var(--purple);
+}
+
+.linker-citation-item.highlighted {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.linker-citation-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.linker-citation-item.auto-linked .linker-citation-num {
+  background: var(--purple);
+}
+
+.linker-citation-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.linker-citation-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.linker-citation-href {
+  font-size: 10.5px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.linker-citation-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.linker-citation-btn {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.linker-citation-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.linker-citation-btn.danger:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.linker-cite-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  vertical-align: middle;
+  cursor: pointer;
+  font-family: var(--font-ui);
+}
+
+.linker-citation-item.auto-linked ~ .linker-cite-badge,
+a.citation.auto-linked + .linker-cite-badge {
+  background: var(--purple);
+}
+
 .content-area{
   flex:1;
   overflow-y:auto;

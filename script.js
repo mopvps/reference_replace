@@ -15,10 +15,11 @@ function switchTab(activeTab) {
 
   // Control Reference Linker elements
   const contentArea = document.getElementById('contentArea');
+  const linkerMain = document.getElementById('linkerMain');
   const summaryBar = document.getElementById('summaryBar');
   const topActions = document.querySelector('.actions'); // Top-right Export/Copy/Compare group
 
-  if (contentArea) contentArea.hidden = !isLinker;
+  if (linkerMain) linkerMain.hidden = !isLinker;
   if (summaryBar) summaryBar.hidden = !isLinker;
   if (topActions) topActions.style.display = isLinker ? 'flex' : 'none';
 
@@ -130,6 +131,257 @@ function saveUndoSnapshot(element) {
   if (undoStack.length > 50) undoStack.shift(); // limit stack size
 }
 
+function extractRefNames(fullText) {
+  const norm = fullText
+    .replace(/&#x0026;/gi, '&')
+    .replace(/&#x26;/gi, '&')
+    .replace(/&amp;/gi, '&')
+    .replace(/&#x2019;/gi, "'")
+    .replace(/&#x2018;/gi, "'")
+    .trim();
+
+  const hasEtAl = /\bet\s*al\b/i.test(norm);
+
+  const PARTICLES = ['van der', 'van den', 'van de', 'von der', 'von', 'van', 'den', 'der', 'de', 'du', 'le', 'la'];
+
+  const ORG_WORDS = ['council', 'commission', 'department', 'ministry', 'authority', 'agency', 'bureau', 'institute',
+    'project', 'programme', 'program', 'association', 'society', 'trust', 'foundation', 'committee', 'board',
+    'office', 'service', 'services', 'company', 'group', 'union', 'organization', 'organisation', 'city', 'district',
+    'university', 'college', 'commons', 'house'];
+
+  // Strip non-year bracketed content e.g. "(Bureau of Environmental Services)" but keep "(2019)" / "(2019a)"
+  const stripped = norm.replace(/\(([^)]*[^0-9)][^)]*)\)/g, (m, inner) => {
+    return /^\d{4}[a-z]?$/.test(inner.trim()) ? m : '';
+  }).replace(/\s+/g, ' ').trim();
+
+  const beforeYear = stripped.replace(/\s*\(?\d{4}[a-z]?\)?.*$/, '').trim();
+
+  let allSurnames = [];
+  let isOrg = false;
+  let isAcronym = false;
+
+  // ACRONYM detection — check FIRST
+  const acronymRe = /^([A-Z]{2,8}(?:\s+and\s+[A-Z]{2,8})?)\s*[\s\(\.,]/;
+  const acronymMatch = norm.match(acronymRe);
+  if (acronymMatch) {
+    const candidate = acronymMatch[1].trim();
+    if (candidate === candidate.toUpperCase() && candidate.length >= 2) {
+      isAcronym = true;
+      allSurnames = [candidate];
+    }
+  }
+
+  // LONG CAMELCASE ORG detection — check SECOND
+  if (!isAcronym) {
+    const firstTok = (beforeYear.split(/[\s,]+/)[0] || '').replace(/\.$/, '');
+    const isMixedCase = /[a-z]/.test(firstTok) && /[A-Z]/.test(firstTok) && firstTok !== firstTok.toUpperCase();
+    const looksLikeSurnamePattern = /^[A-Z][a-zA-Z\-]*\s*,\s*[A-Z]\./.test(beforeYear);
+    if (firstTok.length > 10 && isMixedCase && !looksLikeSurnamePattern) {
+      isOrg = true;
+      allSurnames = [firstTok];
+    }
+  }
+
+  // ORGANISATION detection — check THIRD
+  if (!isAcronym && !isOrg) {
+    const authorPortion = beforeYear.split(/\.\s+/)[0].trim();
+
+    const orgWordHit = ORG_WORDS.some(w => new RegExp(`\\b${w}\\b`, 'i').test(authorPortion));
+
+    const looksLikePersonList =
+      /^[A-Z][a-zA-Z\-]*\s*,\s*[A-Z]\./.test(authorPortion) ||
+      /^[A-Z][a-zA-Z\-]+\s+[A-Z]{1,3}\b/.test(authorPortion) ||
+      /^[A-Z][a-zA-Z\-]*\s*,\s*[A-Z]{1,3}\s*,/.test(authorPortion);
+
+    if (orgWordHit && !looksLikePersonList) {
+      isOrg = true;
+      allSurnames = [authorPortion];
+    } else if (/^Anon\b/i.test(authorPortion)) {
+      isOrg = true;
+      allSurnames = ['Anon'];
+    }
+  }
+
+  // FORMAT B — "Surname I, Surname2 I2 and Surname3 I3 (year)" — single-letter initial after surname
+  if (!isAcronym && !isOrg) {
+    const formatBRe = /^([A-Z][a-zA-Z\-]*(?:\s+[A-Z][a-zA-Z\-]*)*)\s+([A-Z]{1,3})\b(?=[,\s]|$)/;
+    const isFormatB = formatBRe.test(beforeYear) && !/,\s*[A-Z]\./.test(beforeYear);
+    if (isFormatB) {
+      const tokens = beforeYear.split(/\s*(?:,|\s+and\s+|\s*&\s*)\s*/).filter(Boolean);
+      tokens.forEach(tok => {
+        const t = tok.trim();
+        if (!t || /^et\s*al\.?$/i.test(t)) return;
+        const m = t.match(/^(.+?)\s+[A-Z]{1,3}\.?$/);
+        let surname = m ? m[1].trim() : t;
+        for (const p of PARTICLES) {
+          const re = new RegExp(`^(${p})\\s+(.+)$`, 'i');
+          const pm = surname.match(re);
+          if (pm) { surname = `${p} ${pm[2]}`; break; }
+        }
+        if (surname) allSurnames.push(surname);
+      });
+    }
+  }
+
+  // FORMAT A — APA "Surname, I. I., Surname2, I2. I2., ..."
+  if (!isAcronym && !isOrg && allSurnames.length === 0) {
+    const parts = beforeYear.split(',').map(s => s.trim()).filter(Boolean);
+    let i = 0;
+    while (i < parts.length) {
+      let token = parts[i].replace(/^(and|&)\s+/i, '').trim();
+      if (!token || /^et\s*al\.?$/i.test(token)) { i++; continue; }
+      if (/^[A-Z]\.?(\s*[A-Z]\.?)*$/.test(token)) { i++; continue; }
+
+      let surname = token.replace(/\s+(and|&)\s+.*$/i, '').trim();
+      const surnameTokens = surname.split(/\s+/);
+      const lastTok = surnameTokens[surnameTokens.length - 1];
+      if (/^[A-Z]\.?$/.test(lastTok) && surnameTokens.length > 1) {
+        surname = surnameTokens.slice(0, -1).join(' ');
+      }
+      for (const p of PARTICLES) {
+        const re = new RegExp(`^(${p})\\s+`, 'i');
+        if (re.test(surname)) break;
+      }
+      if (surname) allSurnames.push(surname);
+      i++;
+    }
+  }
+
+  // Fallback: single leading word as surname
+  if (!isAcronym && !isOrg && allSurnames.length === 0) {
+    const tok = beforeYear.split(/[\s,]+/)[0] || '';
+    if (tok) allSurnames.push(tok);
+  }
+
+  if (hasEtAl && allSurnames.length > 1) {
+    // keep collected names, et al. patterns generated separately using first author
+  }
+
+  const firstSurname = allSurnames[0] || '';
+  const secondSurname = allSurnames[1] || '';
+
+  const yearMatches = norm.match(/\b((?:19|20)\d{2}[a-z]?)\b/g) || [];
+  const allYears = [...new Set(yearMatches)];
+
+  return { firstSurname, secondSurname, allSurnames, allYears, isOrg, isAcronym };
+}
+
+function buildSearchPatterns(ref) {
+  const { firstSurname, allSurnames = [], allYears, isOrg, isAcronym } = ref;
+  if (!firstSurname) return [];
+
+  const patterns = [];
+  const push = p => { if (p && p.trim()) patterns.push(p.trim()); };
+
+  const expandedYears = new Set();
+  allYears.forEach(year => {
+    expandedYears.add(year);
+    expandedYears.add(year.replace(/[a-z]$/, ''));
+  });
+
+  expandedYears.forEach(year => {
+    if (isOrg || isAcronym) {
+      push(`(${firstSurname}, ${year})`);
+      push(`(${firstSurname} (${year}))`);
+      push(`${firstSurname}, ${year}`);
+      push(`${firstSurname} (${year})`);
+      return;
+    }
+
+    if (allSurnames.length <= 1) {
+      push(`(${firstSurname}, ${year})`);
+      push(`${firstSurname}, ${year}`);
+      push(`${firstSurname} (${year})`);
+      push(`(${firstSurname} et al., ${year})`);
+      push(`(${firstSurname} et al. ${year})`);
+      push(`${firstSurname} et al., ${year}`);
+      push(`${firstSurname} et al. (${year})`);
+      push(`${firstSurname} et al (${year})`);
+      push(`${firstSurname}'s, ${year}`);
+      push(`${firstSurname}'s (${year})`);
+      ['e.g.', 'esp.', 'c.f.'].forEach(prefix => push(`${prefix} ${firstSurname}, ${year}`));
+      return;
+    }
+
+    if (allSurnames.length === 2) {
+      const [S1, S2] = allSurnames;
+      push(`(${S1} and ${S2}, ${year})`);
+      push(`(${S1} & ${S2}, ${year})`);
+      push(`(${S1} and ${S2} (${year}))`);
+      push(`(${S1} & ${S2} (${year}))`);
+      push(`${S1} and ${S2}, ${year}`);
+      push(`${S1} & ${S2}, ${year}`);
+      push(`${S1} and ${S2} (${year})`);
+      push(`${S1} & ${S2} (${year})`);
+      push(`${S1} and ${S2}'s, ${year}`);
+      push(`(${S1} et al., ${year})`);
+      push(`${S1} et al., ${year}`);
+      push(`${S1} et al. (${year})`);
+      push(`${S1} et al (${year})`);
+      push(`(${S1}, ${year})`);
+      push(`${S1} (${year})`);
+      push(`${S1}, ${year}`);
+      return;
+    }
+
+    // 3+ authors — dynamic N
+    const S1 = allSurnames[0];
+    const allButLast = allSurnames.slice(0, -1).join(', ');
+    const last = allSurnames[allSurnames.length - 1];
+
+    const fullAnd = `${allButLast}, and ${last}`;
+    const fullAnd2 = `${allButLast} and ${last}`;
+    const fullAmp = `${allButLast}, & ${last}`;
+    const fullAmp2 = `${allButLast} & ${last}`;
+
+    push(`(${fullAnd}, ${year})`);
+    push(`(${fullAnd2}, ${year})`);
+    push(`(${fullAmp}, ${year})`);
+    push(`(${fullAmp2}, ${year})`);
+    push(`(${fullAnd} (${year}))`);
+    push(`(${fullAmp} (${year}))`);
+    push(`${fullAnd}, ${year}`);
+    push(`${fullAnd2}, ${year}`);
+    push(`${fullAmp}, ${year}`);
+    push(`${fullAmp2}, ${year}`);
+    push(`${fullAnd} (${year})`);
+    push(`${fullAmp} (${year})`);
+
+    push(`(${S1} et al., ${year})`);
+    push(`(${S1} et al. ${year})`);
+    push(`${S1} et al., ${year}`);
+    push(`${S1} et al. (${year})`);
+    push(`${S1} et al (${year})`);
+    push(`(${S1}, ${year})`);
+    push(`${S1} (${year})`);
+    push(`${S1}, ${year}`);
+
+    ['e.g.', 'esp.', 'c.f.'].forEach(prefix => push(`${prefix} ${S1} et al., ${year}`));
+  });
+
+  const result = [...new Set(patterns)].filter(p => /\d/.test(p));
+  result.sort((a, b) => b.length - a.length);
+  return result;
+}
+
+function normalizeForSearch(text) {
+  return text
+    .replace(/&#x0026;/gi, '&')
+    .replace(/&#x26;/gi, '&')
+    .replace(/&amp;/gi, '&')
+    .replace(/&#x2019;/gi, "'")
+    .replace(/&#x2018;/gi, "'")
+    .replace(/&#x201C;/gi, '"')
+    .replace(/&#x201D;/gi, '"')
+    .replace(/&#x2013;/gi, '-')
+    .replace(/&#x2014;/gi, '-')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s*&\s*/g, ' & ')
+    .replace(/([;,])(\S)/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function parseAndRender(text) {
   let parsedDoc = new DOMParser().parseFromString(text, 'application/xhtml+xml');
   if (parsedDoc.querySelector('parsererror')) {
@@ -147,7 +399,8 @@ function parseAndRender(text) {
     const surname = (fullText.split(/[\s,]/)[0] || '').trim();
     const yearMatch = fullText.match(/\((\d{4}[a-z]?)\)/);
     const year = yearMatch ? yearMatch[1] : '';
-    refs.push({ id, text: fullText, surname, cleanSurname: stripDiacriticsAndSpecial(surname).toLowerCase(), year });
+    const { firstSurname, secondSurname, allSurnames, allYears, isOrg, isAcronym } = extractRefNames(fullText);
+    refs.push({ id, text: fullText, surname, cleanSurname: stripDiacriticsAndSpecial(surname).toLowerCase(), year, firstSurname, secondSurname, allSurnames, allYears, isOrg, isAcronym });
   });
 
   fuse = new Fuse(refs, { keys: ['cleanSurname'], threshold: 0.5, includeScore: true });
@@ -852,6 +1105,102 @@ function updateStats() {
   document.getElementById('statLinked').textContent = manualLinkedCount;
   document.getElementById('statUnlinked').textContent = autoLinkedCount;
   document.getElementById('statRefs').textContent = refs.length;
+  renderCitationSidebar();
+}
+
+function renderCitationSidebar() {
+  const body = document.getElementById('linkerSidebarBody');
+  const count = document.getElementById('linkerSidebarCount');
+  if (!body || !count) return;
+
+  contentArea.querySelectorAll('.linker-cite-badge').forEach(b => b.remove());
+
+  const citations = [...contentArea.querySelectorAll('a.citation.linked')];
+  count.textContent = citations.length;
+
+  if (!citations.length) {
+    body.innerHTML = '<div class="linker-sidebar-empty">No citations linked yet.</div>';
+    return;
+  }
+
+  body.innerHTML = '';
+
+  citations.forEach((a, i) => {
+    const badge = document.createElement('span');
+    badge.className = 'linker-cite-badge';
+    badge.textContent = i + 1;
+    badge.title = `Citation ${i + 1}`;
+    badge.addEventListener('click', e => {
+      e.stopPropagation();
+      highlightSidebarCitation(i);
+    });
+    a.insertAdjacentElement('afterend', badge);
+
+    const item = document.createElement('div');
+    const isAuto = a.classList.contains('auto-linked');
+    item.className = 'linker-citation-item' + (isAuto ? ' auto-linked' : '');
+    item.dataset.index = i;
+
+    const num = document.createElement('span');
+    num.className = 'linker-citation-num';
+    num.textContent = i + 1;
+
+    const itemBody = document.createElement('div');
+    itemBody.className = 'linker-citation-body';
+
+    const text = document.createElement('div');
+    text.className = 'linker-citation-text';
+    text.textContent = a.textContent.trim();
+
+    const href = document.createElement('div');
+    href.className = 'linker-citation-href';
+    href.textContent = a.getAttribute('href');
+
+    const actions = document.createElement('div');
+    actions.className = 'linker-citation-actions';
+
+    const unlinkBtn = document.createElement('button');
+    unlinkBtn.className = 'linker-citation-btn danger';
+    unlinkBtn.textContent = 'Unlink';
+    unlinkBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      saveUndoSnapshot(a);
+      const isAutoLinked = a.classList.contains('auto-linked');
+      const textNode = document.createTextNode(a.textContent);
+      a.replaceWith(textNode);
+      if (isAutoLinked) {
+        autoLinkedCount = Math.max(0, autoLinkedCount - 1);
+      } else {
+        manualLinkedCount = Math.max(0, manualLinkedCount - 1);
+      }
+      updateStats();
+      toast('Citation unlinked', 'success');
+    });
+
+    item.addEventListener('click', () => {
+      highlightSidebarCitation(i);
+      a.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    actions.appendChild(unlinkBtn);
+    itemBody.appendChild(text);
+    itemBody.appendChild(href);
+    itemBody.appendChild(actions);
+    item.appendChild(num);
+    item.appendChild(itemBody);
+    body.appendChild(item);
+  });
+}
+
+function highlightSidebarCitation(index) {
+  document.querySelectorAll('.linker-citation-item').forEach(el => {
+    el.classList.remove('highlighted');
+  });
+  const target = document.querySelector(`.linker-citation-item[data-index="${index}"]`);
+  if (target) {
+    target.classList.add('highlighted');
+    target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 }
 
 exportBtn.addEventListener('click', () => {
@@ -888,6 +1237,102 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
     toast('Copy failed: ' + err.message);
   }
 });
+
+// Returns combined text of all text nodes NOT inside <a> tags in a block
+function getFreeText(block) {
+  let text = '';
+  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (node.parentElement.closest('a[href]')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  let node;
+  while ((node = walker.nextNode())) text += node.nodeValue;
+  return text;
+}
+
+function runAutoLink() {
+  if (!refs.length) { toast('Load a file first', ''); return; }
+
+  const autoLinkBtn = document.getElementById('autoLinkBtn');
+  if (autoLinkBtn) { autoLinkBtn.disabled = true; autoLinkBtn.textContent = 'Linking...'; }
+
+  let linkedCount = 0;
+
+  const blocks = [...contentArea.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6')]
+    .filter(el => !el.classList.contains('ref-block') && !el.closest('.ref-block'));
+
+  const patternMap = [];
+  refs.forEach(ref => {
+    const patterns = buildSearchPatterns(ref);
+    const href = '#' + ref.id;
+    patterns.forEach(p => patternMap.push({ pattern: p, href }));
+  });
+  patternMap.sort((a, b) => b.pattern.length - a.pattern.length);
+
+  // PASS 1: Direct pattern matching for all blocks
+  // Recompute free text after each successful link to avoid stale DOM reads
+  blocks.forEach(block => {
+    patternMap.forEach(({ pattern, href }) => {
+      const normPattern = normalizeForSearch(pattern);
+      if (!normPattern || !/\d{4}/.test(normPattern)) return;
+
+      const blockFreeText = normalizeForSearch(getFreeText(block));
+      if (!blockFreeText.includes(normPattern)) return;
+
+      if (block.querySelector(`a[href="${href}"]`)) return;
+
+      saveUndoSnapshot(block);
+      const success = linkBlockText(block, normPattern, href, 0);
+      if (success) {
+        linkedCount++;
+        autoLinkedCount++;
+      }
+    });
+  });
+
+  // PASS 2: Semicolon multi-citation splitting
+  blocks.forEach(block => {
+    const freeText = normalizeForSearch(getFreeText(block));
+    const bracketRe = /\(([^)]*;[^)]*)\)/g;
+    let m;
+    while ((m = bracketRe.exec(freeText)) !== null) {
+      const parts = m[1].split(';').map(s => s.trim());
+      parts.forEach(part => {
+        for (const { pattern, href } of patternMap) {
+          const normPattern = normalizeForSearch(pattern);
+          if (!normPattern || !/\d{4}/.test(normPattern)) continue;
+          if (!part.includes(normPattern)) continue;
+          if (block.querySelector(`a[href="${href}"]`)) continue;
+
+          saveUndoSnapshot(block);
+          const success = linkBlockText(block, normPattern, href, 0);
+          if (success) {
+            linkedCount++;
+            autoLinkedCount++;
+          }
+          break;
+        }
+      });
+    }
+  });
+
+  updateStats();
+  renderCitationSidebar();
+
+  if (autoLinkBtn) {
+    autoLinkBtn.disabled = false;
+    autoLinkBtn.innerHTML = '<i data-lucide="zap"></i> Auto Link';
+    lucide.createIcons();
+  }
+
+  linkedCount === 0
+    ? toast('No new citations found to auto-link', '')
+    : toast(`Auto-linked ${linkedCount} citation${linkedCount !== 1 ? 's' : ''}`, 'success');
+}
+
+document.getElementById('autoLinkBtn').addEventListener('click', runAutoLink);
 
 document.getElementById('compareBtn').addEventListener('click', () => {
   // auto-fill left with original, right with exported

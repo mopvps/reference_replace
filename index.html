@@ -118,6 +118,10 @@
         <i data-lucide="diff"></i>
         Compare HTML
       </button>
+      <button class="btn-export" id="autoLinkBtn" style="background:var(--purple);margin-left:8px;">
+        <i data-lucide="zap"></i>
+        Auto Link
+      </button>
     </div>
 
     <div class="fmt-area" id="fmtArea" hidden>
@@ -186,10 +190,21 @@
       </div>
     </div>
 
-    <div class="content-area" id="contentArea">
-      <div class="empty-state">
-        <i data-lucide="file-text"></i>
-        <p>Upload an XHTML file to begin linking citations</p>
+    <div class="linker-main" id="linkerMain">
+      <div class="content-area" id="contentArea">
+        <div class="empty-state">
+          <i data-lucide="file-text"></i>
+          <p>Upload an XHTML file to begin linking citations</p>
+        </div>
+      </div>
+      <div class="linker-sidebar" id="linkerSidebar">
+        <div class="linker-sidebar-header">
+          <span class="linker-sidebar-title">Linked Citations</span>
+          <span class="linker-sidebar-count" id="linkerSidebarCount">0</span>
+        </div>
+        <div class="linker-sidebar-body" id="linkerSidebarBody">
+          <div class="linker-sidebar-empty">No citations linked yet.</div>
+        </div>
       </div>
     </div>
 
